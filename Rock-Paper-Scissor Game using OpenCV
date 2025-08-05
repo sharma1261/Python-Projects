@@ -1,0 +1,119 @@
+import random
+# import mediapipes as mp
+import cv2 
+import cvzone   #to use web camera
+from cvzone.HandTrackingModule import HandDetector   #to detect hand
+import time
+
+
+# capture video from webcamera using open cv 
+cap=cv2.VideoCapture(0) #0 is the default camera
+cap.set(3,640) #set width
+cap.set(4,480) #set height
+
+
+detector=HandDetector(maxHands=1) #detect one hand
+
+
+timer=0
+stateresult=False
+startgame=False
+score=[0,0]
+
+
+while True:
+    imgbg=cv2.imread("E:\game\BG.png")  
+    success,img=cap.read()  
+
+
+    imgscale=cv2.resize(img,(0,0),None,0.875,0.875)  #resize the image
+    imgscale=imgscale[:,80:480]
+
+
+    # create game 
+    hands,img=detector.findHands(imgscale)
+
+
+    if startgame:
+        if stateresult is False:
+            timer=time.time()-initialtime
+            cv2.putText(imgbg,str(int(timer)),(605,435),cv2.FONT_HERSHEY_PLAIN,6,(255,0,255),4)
+
+            if timer>3:
+                stateresult=True
+                timer=0
+
+                if hands:
+                    playermove=None
+                    hand=hands[0]
+                    fingers=detector.fingersUp(hand)
+
+                    if fingers==[0,0,0,0,0]:
+                        playermove=1     #rock
+                    if fingers==[1,1,1,1,1]:
+                        playermove=2       #paper
+                    if fingers==[0,1,1,0,0]:
+                        playermove=3     #scissor
+
+                    randomnumber=random.randint(1,3)
+                    imgai=cv2.imread(f"E:\game\{randomnumber}.png",cv2.IMREAD_UNCHANGED)  
+                    imgbg=cvzone.overlayPNG(imgbg,imgai)
+
+
+# game rsesult
+
+                    if (playermove==1 and randomnumber==3) or\
+                    (playermove==2 and randomnumber==1) or\
+                    (playermove==3 and randomnumber==2):
+                        score[1]+=1
+
+                #ai score 
+                    if (playermove==3 and randomnumber==1) or\
+                    (playermove==1 and randomnumber==2) or\
+                    (playermove==2 and randomnumber==3):
+                        score[0]+=1
+
+    imgbg[234:654,795:1195]=imgscale
+
+
+    if stateresult:
+        imgbg=cvzone.overlayPNG(imgbg,imgai,pos=(165,300))
+
+    cv2.putText(imgbg,str(score[0]),(410,215),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255),6)
+
+    cv2.putText(imgbg,str(score[1]),(1112,215),cv2.FONT_HERSHEY_PLAIN,4,(255,255,255),6)
+
+    cv2.imshow("Bg",imgbg)
+
+    key=cv2.waitKey(1)
+
+    if key==ord('s'):
+        startgame=True
+        initialtime=time.time()
+        stateresult=False
+    
+    if key==ord('q'):
+            break
+
+
+cap.release()
+cv2.destroyAllWindows()  #close all windows
+
+
+# declare the rsult
+if score[0]>score[1]:
+    print("AI win")
+
+
+elif score[1]>score[0]:
+    print("Player win")
+
+
+else:
+    print("Match draw")
+
+
+
+
+
+#
