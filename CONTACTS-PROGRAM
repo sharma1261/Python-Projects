@@ -1,0 +1,208 @@
+FILENAME="CONTACTS.TXT"
+
+
+def add_contacts():
+
+    try:
+        name=input("Enter Name: ")
+
+        # Keep asking until user enters a valid 10-digit number
+        while True:
+
+            phone = input("Enter Phone Number: ")
+
+            if phone.isdigit() and len(phone) == 10:
+
+                break
+            else:
+
+                print("Invalid phone number. Please enter exactly 10 digits.")
+        
+        with open("contacts.txt","a") as file:
+
+            file.write(f"{name},{phone}\n")
+
+        print("Contact added successfully.")
+
+    except Exception as e:
+
+        print(f"an error occureed: {e}")
+
+def view_contacts():
+
+    try:
+
+        with open(FILENAME,"r") as f:
+
+            contacts=f.readlines()
+
+            if not contacts:
+
+                print("no contacts found ")
+
+            else:
+
+                print("\nContacts List:")
+
+                for i, contact in enumerate(contacts, start=1):
+
+                    parts = contact.strip().split(",")
+
+                    if len(parts) == 2:  # only process valid lines
+
+                        name, phone = parts
+
+                        print(f"{i}. {name} -- {phone}")
+
+                    else:
+
+                        print(f"{i}. [Invalid entry: {contact.strip()}]")
+
+
+    except FileNotFoundError:
+
+        print("no contacts found, please add a contact first ")
+
+    except Exception as e:
+
+        print("error while reading a file ",e)
+
+
+
+def update_contact():
+
+    try:
+
+        view_contacts()
+
+        choice=int(input("Enter the contact number to update: "))
+
+
+        with open (FILENAME,"r") as f:
+
+            contacts=f.readlines()
+
+            if 1<=choice<=len(contacts):
+
+                name,phone=contacts[choice-1].strip().split(",")
+
+                print(f"Current Name: {name}, Current Phone: {phone}")
+
+                new_name=input("Enter new name (leave blank to keep current: ") or name 
+
+                while True:
+
+                    new_phone = input("Enter new phone number (leave blank to keep current): ") or phone
+
+                    if new_phone.isdigit() and len(new_phone) == 10:
+
+                        break
+
+                    elif new_phone == phone:  # user kept old value
+
+                        break
+
+                    else:
+
+                        print("Invalid phone number. Please enter exactly 10 digits.")
+
+                contacts[choice-1]=f"{new_name},{new_phone}\n"
+
+
+                with open(FILENAME,"w") as f:
+
+                    f.writelines(contacts)
+
+
+                print("Contact updated successfully.")
+
+            else:
+                print("Invalid contact number.")
+
+    except ValueError:
+
+        print("Please enter a valid number.")
+
+    except Exception as e:
+
+        print(f"an error occurred",e)
+
+
+def delete_contact():
+
+    try:
+
+        view_contacts()
+
+        choice=int(input("Enter the contact number to delete: "))
+
+        with open(FILENAME,"r") as f:
+
+            contacts=f.readlines()
+
+
+        if 1<=choice<=len(contacts):
+
+            deleted=contacts.pop(choice-1)
+
+            with open(FILENAME,"w") as f:
+
+                f.writelines(contacts) 
+                print(f"Contact {deleted.strip()} deleted successfully.")
+
+
+        else:
+                print("Invalid contact number.")
+
+    except ValueError:
+        print("Please enter a valid number.")
+
+    except  Exception as e:
+        print(f"an error occurred:{e}")
+
+def main():
+    while True:
+        print("\nContact Management System")
+        print("1. Add Contact")
+        print("2.View Contacts")
+        print("3.Update Contact")
+        print("4.Delete Contacts")
+        print("5.exit")
+
+        try:
+            choice=int(input("Enter your choice (1-5): "))
+
+            if choice==1:
+
+                add_contacts()
+
+            elif choice==2:
+
+                view_contacts()
+
+            elif choice==3:
+
+                update_contact()
+
+            elif choice==4:
+
+                delete_contact()
+
+            elif choice==5:
+
+                print("Exiting the program.")
+
+                break
+
+            else:
+
+                print("invalid choice")
+
+        except ValueError:
+            print("Please enter a valid number.")
+
+        except Exception as e:
+            print(f"an error occurred: {e}")
+
+if __name__=="__main__":
+    main()
