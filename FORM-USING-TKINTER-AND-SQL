@@ -1,0 +1,105 @@
+import tkinter as tk 
+from tkinter import messagebox,ttk
+import mysql.connector 
+
+# step1: conect to database 
+def connect_db():
+    return mysql.connector.connect(
+        host="127.0.0.1",
+        user="root",
+        password="",
+        database="test",
+        use_pure=True,
+
+    )
+
+# step 2: insert data into db 
+
+def save_data():
+    name=name_entry.get()
+    email=email_entry.get()
+    age=age=age_entry.get()
+
+    if name=="" or email=="" or age=="":
+        messagebox.showwarning("Input Error","All fields are required ")
+        return
+    
+    try :
+        conn=connect_db()
+        cursor=conn.cursor()
+        query="INSERT INTO user_data(name, email,age) VALUES (%s,%s,%s)"
+        values=(name,email,age)
+        cursor.execute(query,values)
+        conn.commit()
+        messagebox.showinfo("Success","Data Saved Successfully")
+
+        # refresh table after insert
+        view_data()
+
+        conn.close()
+    except Exception as e:
+        messagebox.showerror("Database Error", str(e))
+
+# step 3: fetch and display all data 
+
+def view_data():
+    #clear old table entries
+    for row in tree.get_children():
+        tree.delete(row)
+
+    try:
+        conn=connect_db()
+        cursor=conn.cursor()
+        cursor.execute("Select *from user_data")
+        rows=cursor.fetchall()
+        for row in rows:
+            tree.insert("",tk.END,values=row)
+
+        conn.close()
+    except Exception as e:
+        messagebox.showerror("Database Error",str(e))
+
+
+# step 4: tkinter GUI
+root=tk.Tk()
+root.title("user data form")
+root.geometry("600x500")
+
+# input form 
+form_frame=tk.Frame(root)
+form_frame.pack(pady=10)
+
+tk.Label(form_frame,text="Name:").grid(row=0,column=0,padx=5,pady=5)
+name_entry=tk.Entry(form_frame,width=40)
+name_entry.grid(row=0,column=1)
+
+tk.Label(form_frame,text="Email:").grid(row=1,column=0,padx=5,pady=5)
+email_entry=tk.Entry(form_frame,width=40)
+email_entry.grid(row=1,column=1)
+
+tk.Label(form_frame,text="Age:").grid(row=2,column=0,padx=5,pady=5)
+age_entry=tk.Entry(form_frame,width=40)
+age_entry.grid(row=2,column=1)
+
+
+# buttons
+btn_frame=tk.Frame(root)
+btn_frame.pack(pady=10)
+
+tk.Button(btn_frame,text="Save Data",command=save_data).grid(row=0,column=0,padx=10)
+tk.Button(btn_frame,text="Refresh Records",command=view_data).grid(row=0,column=1,padx=10)
+
+# Table for records
+columns=("Id","Name","Email","Age")
+tree=ttk.Treeview(root,column=columns,show="headings",height=10)
+for col in columns:
+    tree.heading(col,text=col)
+    tree.column(col,width=120)
+
+tree.pack(pady=20,fill="x")
+
+# show exsisting data at start
+
+view_data()
+
+root.mainloop()
