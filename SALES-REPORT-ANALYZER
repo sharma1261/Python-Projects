@@ -1,0 +1,106 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# ------------------ 1. LOAD DATA ------------------
+def load_data(file_path):
+    """Load the sales data from the CSV file"""
+    try:
+        data = pd.read_csv(file_path)  # use the argument passed, not hardcoded path
+        print("Data loaded successfully!")
+        return data
+    except Exception as e:
+        print("Error loading data:", e)
+        return None
+
+
+# ------------------ 2. CLEAN DATA ------------------
+def Clean_data(data):
+    """Clean and preprocess the sales data"""
+    print("Cleaning data...")
+
+    #  Clean column names (removes hidden spaces)
+    data.columns = data.columns.str.strip()
+
+    #  Fill missing product categories
+    if 'Product_category' in data.columns:
+        data['Product_category'] = data['Product_category'].fillna("Unknown")
+
+    #  Drop completely empty rows
+    data = data.dropna(how='all')
+
+    #  Convert 'Date' column to datetime
+    if 'Date' in data.columns:
+        data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
+    else:
+        print(" Column 'Date' not found in data!")
+        return data
+
+    #  Convert Sales_Amount to numeric
+    if 'Sales_Amount' in data.columns:
+        data['Sales_Amount'] = pd.to_numeric(data['Sales_Amount'], errors='coerce')
+
+    #  Create Year_Month column
+    data['Year_Month'] = data['Date'].dt.to_period('M')
+
+    # Calculate revenue if columns exist
+    if 'Quantity' in data.columns and 'Price' in data.columns:
+        data["Revenue"] = data['Quantity'] * data['Price']
+
+    print("Data cleaned successfully!")
+    return data
+
+
+# ------------------ 3. ANALYZE DATA ------------------
+def analyze_data(data):
+    """Analyze and display insights from the data"""
+    print("Analyzing data...")
+
+    #  Check that required columns exist
+    if 'Year_Month' not in data.columns or 'Sales_Amount' not in data.columns:
+        print(" Missing 'Year_Month' or 'Sales_Amount' columns for analysis!")
+        return
+
+    #  Total sales by month
+    monthly_sales = data.groupby('Year_Month')['Sales_Amount'].sum()
+    print("\nTotal Monthly Sales:")
+    print(monthly_sales)
+
+    #  Top 5 products by revenue
+    if 'Revenue' in data.columns:
+        top_products = (
+            data.groupby('Product_Name')['Revenue'].sum().sort_values(ascending=False).head(5)
+        )
+        print("\nTop 5 Products by Revenue:")
+        print(top_products)
+    else:
+        print("\n Columns 'Revenue' or 'Product_name' not found, skipping top product analysis.")
+
+    # Visualize monthly sales
+    monthly_sales.plot(kind="bar", figsize=(10, 6), color='skyblue')
+    plt.title("Monthly Sales")
+    plt.xlabel("Month")
+    plt.ylabel("Total Sales Amount")
+    plt.tight_layout()
+    plt.show()
+
+
+# ------------------ 4. MAIN FUNCTION ------------------
+def main():
+    print("---- Sales Data Analysis ----")
+
+    # Load data
+    file_path = input("Enter the path of the sales data CSV file: ")
+    data = load_data(file_path)
+    if data is None:
+        return
+
+    # Clean data
+    data = Clean_data(data)
+
+    # Analyze data
+    analyze_data(data)
+
+
+# ------------------ 5. RUN PROGRAM ------------------
+if __name__ == "__main__":
+    main()
