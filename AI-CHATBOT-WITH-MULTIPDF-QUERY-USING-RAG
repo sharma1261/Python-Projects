@@ -1,0 +1,199 @@
+import os
+import textwrap
+import numpy as np
+import requests
+import PyPDF2
+import faiss
+import streamlit as st
+from fastembed import TextEmbedding
+
+# ------------------------------------------------------------------
+API_KEY = open("openaikey.txt").read().strip()
+CHAT_MODEL = "meta-llama/llama-3.1-8b-instruct"
+EMBED_MODEL = TextEmbedding("BAAI/bge-small-en-v1.5")
+CHUNK_SIZE = 150
+TOP_K = 4
+UPLOAD_DIR = "pdfs"
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# ------------------------------------------------------------------
+# --- LLM CALL -----------------------------------------------------
+def ask_llm(messages):
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    payload = {"model": CHAT_MODEL, "messages": messages, "temperature": 0.2}
+
+    try:
+        r = requests.post(url, headers=headers, json=payload)
+        r.raise_for_status()
+        return r.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f" API Error: {e}"
+
+
+# ------------------------------------------------------------------
+# --- PDF READING & PROCESSING ------------------------------------
+def pdf_to_text(path):
+    reader = PyPDF2.PdfReader(open(path, "rb"))
+    text = ""
+    for page in reader.pages:
+        extracted = page.extract_text()
+        if extracted:
+            text += extracted + "\n"
+    return text
+
+
+def chunk_text(text, pdf_name):
+    words = text.split()
+    for i in range(0, len(words), CHUNK_SIZE):
+        chunk = " ".join(words[i:i + CHUNK_SIZE])
+        yield f"[PDF: {pdf_name}]\n{chunk}"
+
+
+def summarize_pdf(text):
+    msg = [
+        {"role": "system", "content": "Summarize the PDF in clear bullet points."},
+        {"role": "user", "content": text}
+    ]
+    return ask_llm(msg)
+
+
+# ------------------------------------------------------------------
+# ---- Embeddings + Index ------------------------------------------
+def get_embeddings(texts):
+    embeddings = EMBED_MODEL.embed(texts)
+    return np.array(list(embeddings)).astype("float32")
+
+
+def build_index(chunks):
+    vecs = get_embeddings(chunks)
+    index = faiss.IndexFlatL2(vecs.shape[1])
+    index.add(vecs)
+    return index
+
+
+def search(query, index, chunks):
+    q_vec = get_embeddings([query])[0]
+    D, I = index.search(np.array([q_vec]), TOP_K)
+    return [chunks[i] for i in I[0]]
+
+
+# ------------------------------------------------------------------
+# ---- STREAMLIT UI ------------------------------------------------
+st.set_page_config(page_title="🤖 AI Chatbot + PDF RAG", layout="wide")
+st.title("🤖 AI Chatbot with Multi-PDF RAG")
+st.caption("Upload PDFs, get summaries, ask anything, and get AI-powered answers.")
+
+
+# -------- Session State ------------
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+if "chunks" not in st.session_state:
+    st.session_state.chunks = []
+
+if "index" not in st.session_state:
+    st.session_state.index = None
+
+
+# ------------------------------------------------------------------
+# ---- SIDEBAR PDF MANAGER -----------------------------------------
+st.sidebar.header("📄 Upload PDFs")
+
+uploaded_files = st.sidebar.file_uploader(
+    "Upload PDF(s)",
+    accept_multiple_files=True,
+    type=["pdf"]
+)
+
+if uploaded_files:
+    for pdf in uploaded_files:
+        save_path = os.path.join(UPLOAD_DIR, pdf.name)
+
+        # Save uploaded file
+        with open(save_path, "wb") as f:
+            f.write(pdf.read())
+        st.sidebar.success(f"Uploaded: {pdf.name}")
+
+        # Extract text
+        text = pdf_to_text(save_path)
+
+        # Summaries
+        with st.sidebar.expander(f"📘 Summary: {pdf.name}", expanded=False):
+            with st.spinner("Summarizing..."):
+                summary = summarize_pdf(text)
+                st.write(summary)
+
+        # Add chunks
+        new_chunks = list(chunk_text(text, pdf.name))
+        st.session_state.chunks.extend(new_chunks)
+
+    # Rebuild FAISS index
+    if st.session_state.chunks:
+        st.session_state.index = build_index(st.session_state.chunks)
+        st.sidebar.success("🔍 PDF Index Updated!")
+
+
+# ------------------------------------------------------------------
+# ---- MAIN CHAT ----------------------------------------------------
+st.markdown("---")
+user_input = st.text_input("💬 Ask anything…")
+
+
+if user_input:
+    st.session_state.chat_history.append({"role": "user", "content": user_input})
+
+    if st.session_state.index:
+        # RAG mode
+        relevant = search(user_input, st.session_state.index, st.session_state.chunks)
+        prompt = [
+            {"role": "system",
+             "content": "You are a legal/comprehensive assistant. Use provided PDF context if relevant."},
+            {"role": "user",
+             "content": f"Relevant PDF Chunks:\n{relevant}\n\nQuestion: {user_input}"}
+        ]
+        reply = ask_llm(prompt)
+
+    else:
+        # No PDFs — normal chatbot
+        reply = ask_llm(st.session_state.chat_history)
+
+    st.session_state.chat_history.append({"role": "assistant", "content": reply})
+
+
+# ------------------------------------------------------------------
+# ---- DISPLAY CHAT ----
+st.subheader("🗨 Conversation")
+
+# Group messages into Q/A pairs
+pairs = []
+history = st.session_state.chat_history
+
+i = 0
+while i < len(history):
+    if i + 1 < len(history):
+        # user + bot reply
+        pairs.append((history[i], history[i + 1]))
+        i += 2
+    else:
+        # message without reply yet
+        pairs.append((history[i], None))
+        i += 1
+
+# Show newest pair at top
+for user_msg, bot_msg in reversed(pairs):
+
+    # Show question
+    if user_msg and user_msg["role"] == "user":
+        st.markdown(
+            f"<div style='padding:10px;background:black;border-radius:10px;margin-bottom:5px'><b>You:</b> {user_msg['content']}</div>",
+            unsafe_allow_html=True
+        )
+
+    # Show answer
+    if bot_msg and bot_msg["role"] == "assistant":
+        st.markdown(
+            f"<div style='padding:10px;background:black ;border-radius:10px;margin-bottom:10px'><b>Bot:</b> {bot_msg['content']}</div>",
+            unsafe_allow_html=True
+        )
